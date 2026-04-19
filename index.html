@@ -1,0 +1,436 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell 
+} from 'recharts';
+import { 
+  Rocket, Brain, Tv, Building2, ShieldCheck, 
+  ChevronRight, RefreshCcw, Users, Trophy, PartyPopper, Sparkles, Star
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, collection, addDoc, onSnapshot, query 
+} from 'firebase/firestore';
+import { 
+  getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged 
+} from 'firebase/auth';
+
+// --- Firebase Configuration ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'gen-z-career-test-v3';
+
+const App = () => {
+  const [user, setUser] = useState(null);
+  const [step, setStep] = useState('welcome'); // welcome, classSelect, quiz, result, stats
+  const [classId, setClassId] = useState('');
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [tally, setTally] = useState({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+  const [finalResultId, setFinalResultId] = useState(null);
+  const [allResults, setAllResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // 1. Firebase Auth Initializer
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Authentication Error", err);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Real-time Data Sync (Public Collection)
+  useEffect(() => {
+    if (!user) return;
+    const resultsCol = collection(db, 'artifacts', appId, 'public', 'data', 'testResults');
+    const q = query(resultsCol);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => doc.data());
+      setAllResults(data);
+      setLoading(false);
+    }, (err) => {
+      console.error("Firestore Sync Error", err);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // --- Sound Engine (C Major Arpeggio) ---
+  const playWinSound = () => {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const playNote = (freq, start, duration) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.2, start + 0.05);
+      gain.gain.linearRampToValueAtTime(0, start + duration);
+      osc.start(start);
+      osc.stop(start + duration);
+    };
+    [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => playNote(f, i * 0.12, 0.5));
+  };
+
+  // --- Expanded Questions with Scaffolding ---
+  const questions = [
+    {
+      q: "When a technical task is 'beyond your ability' [超出能力范围], how do you react?",
+      options: [
+        { text: "I feel excited and ready to endure hardship [忍受艰辛].", score: [1] },
+        { text: "I pick the brains of [请教] senior experts immediately.", score: [4] },
+        { text: "I rely on my instinctive sense [直觉] to find a shortcut.", score: [3] }
+      ]
+    },
+    {
+      q: "What is your primary 'internal driving force' [内在驱动力] for learning?",
+      options: [
+        { text: "To create a NEW era [开启新时代] through AI algorithms.", score: [2] },
+        { text: "To make a difference [创造改变] for the sake of society.", score: [5] },
+        { text: "To gain huge success and higher personal status.", score: [1, 4] }
+      ]
+    },
+    {
+      q: "Your ideal 'work style' [工作风格] involves:",
+      options: [
+        { text: "Flexible hours [灵活工时] and no conventional routines.", score: [3, 2] },
+        { text: "A structured [有条理的] nine-to-five system for efficiency.", score: [4, 5] },
+        { text: "Working tirelessly [不知疲倦] until the DREAM is achieved.", score: [1] }
+      ]
+    },
+    {
+      q: "How do you 'perceive' [看待] teamwork and collective dynamics?",
+      options: [
+        { text: "I prefer to team up [团队协作] to solve complex problems.", score: [4, 5] },
+        { text: "I value my individual ideas more than group talk.", score: [2, 3] },
+        { text: "I want my voice to carry weight [有分量] in a big team.", score: [4, 1] }
+      ]
+    },
+    {
+      q: "When choosing a 'calling' [职业天职], you prioritize:",
+      options: [
+        { text: "Technical magnificence [宏伟/壮丽] and innovation.", score: [1, 2] },
+        { text: "User-friendly [用户友好] design that changes lives.", score: [4, 3] },
+        { text: "A strong work ethic [职业道德] and social responsibility.", score: [5] }
+      ]
+    },
+    {
+      q: "If you face failure in a start-up program, you would:",
+      options: [
+        { text: "Never fear failure and strive for [奋斗] a comeback.", score: [1, 2] },
+        { text: "Search for a more reputable [声望高的] platform to join.", score: [4] },
+        { text: "Re-evaluate my aspirations [抱负/志向] and stay down to earth.", score: [5] }
+      ]
+    },
+    {
+      q: "You are 'obsessed with' [沉迷于] exploring:",
+      options: [
+        { text: "Massive [巨大的] hardware and engineering structures.", score: [1] },
+        { text: "Sophisticated AI algorithms and data patterns.", score: [2] },
+        { text: "Thought-provoking [发人深省] content and creative light.", score: [3] }
+      ]
+    },
+    {
+      q: "To you, the 'perfect balance' [完美平衡] in a career is:",
+      options: [
+        { text: "Passion and high efficiency [高效率].", score: [1, 4] },
+        { text: "Creativity and a win-win [双赢] situation.", score: [3, 2] },
+        { text: "Service to the country and stable living.", score: [5] }
+      ]
+    }
+  ];
+
+  const resultProfiles = {
+    1: { 
+      name: "The Hardcore Maker", 
+      target: "Tesla / Xiaomi Auto", 
+      image: "https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&q=80&w=800",
+      icon: <Rocket className="w-12 h-12 text-red-400" />,
+      color: "from-red-500 to-orange-600",
+      desc: "You think big and aim high. You are a natural rule-breaker ready to endure hardship for the DREAM."
+    },
+    2: { 
+      name: "The AI Pioneer", 
+      target: "DeepSeek / OpenAI", 
+      image: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=800",
+      icon: <Brain className="w-12 h-12 text-purple-400" />,
+      color: "from-purple-600 to-indigo-700",
+      desc: "Technologically talented and obsessed with logic. You are destined to lead the NEW revolution in the AI sector."
+    },
+    3: { 
+      name: "The Digital Creative", 
+      target: "Video Hurricane / Bilibili", 
+      image: "https://images.unsplash.com/photo-1492724441997-5dc865305da7?auto=format&fit=crop&q=80&w=800",
+      icon: <Tv className="w-12 h-12 text-pink-400" />,
+      color: "from-pink-500 to-rose-600",
+      desc: "You admire creativity and dislike top-down management. Flexible hours and inspiration are your fuels."
+    },
+    4: { 
+      name: "The Tech Giant Strategist", 
+      target: "ByteDance / Tencent / DJI", 
+      image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=800",
+      icon: <Building2 className="w-12 h-12 text-blue-400" />,
+      color: "from-blue-600 to-cyan-700",
+      desc: "Resourceful and globally minded. You thrive in collective dynamics and want your voice to carry weight."
+    },
+    5: { 
+      name: "The Value Guardian", 
+      target: "Civil Service / Education", 
+      image: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&q=80&w=800",
+      icon: <ShieldCheck className="w-12 h-12 text-green-400" />,
+      color: "from-green-600 to-emerald-700",
+      desc: "A strong work ethic defines you. You act for the sake of society and believe service is your true calling."
+    }
+  };
+
+  // --- Core Logic ---
+  const handleAnswer = (option) => {
+    const newTally = { ...tally };
+    option.score.forEach(id => newTally[id] += 1);
+    setTally(newTally);
+
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+    } else {
+      const winnerId = Object.keys(newTally).reduce((a, b) => newTally[a] > newTally[b] ? a : b);
+      finalizeResult(winnerId);
+    }
+  };
+
+  const finalizeResult = async (id) => {
+    const resId = parseInt(id);
+    setFinalResultId(resId);
+    setStep('result');
+    playWinSound();
+
+    if (user) {
+      try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'testResults'), {
+          classId: classId || 'General',
+          resultId: resId,
+          timestamp: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error("Save error", e);
+      }
+    }
+  };
+
+  const statsData = useMemo(() => {
+    const filtered = classId ? allResults.filter(r => r.classId === classId) : allResults;
+    const total = filtered.length || 1;
+    return Object.keys(resultProfiles).map(id => ({
+      name: resultProfiles[id].name.split(' ').pop(),
+      fullName: resultProfiles[id].name,
+      percentage: Math.round((filtered.filter(r => r.resultId === parseInt(id)).length / total) * 100)
+    }));
+  }, [allResults, classId]);
+
+  // --- Render Views ---
+  if (step === 'welcome') return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white font-sans">
+      <div className="max-w-md w-full space-y-12 text-center animate-in fade-in zoom-in duration-700">
+        <div className="relative inline-block">
+          <div className="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 animate-pulse"></div>
+          <div className="p-8 rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl relative">
+             <Trophy className="text-indigo-400 w-24 h-24 mx-auto" />
+          </div>
+        </div>
+        <div className="space-y-4">
+          <h1 className="text-5xl font-black tracking-tighter leading-none">CAREER DNA</h1>
+          <p className="text-slate-400 text-lg">Find your <span className="text-indigo-400 font-bold italic">Calling</span> [天职]</p>
+        </div>
+        <button 
+          onClick={() => setStep('classSelect')} 
+          className="w-full bg-white text-slate-950 font-black py-5 rounded-2xl shadow-xl hover:bg-indigo-50 transition-all transform active:scale-95 flex items-center justify-center gap-3 text-xl"
+        >
+          IDENTIFY YOURSELF <ChevronRight className="w-6 h-6" />
+        </button>
+      </div>
+    </div>
+  );
+
+  if (step === 'classSelect') return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+      <div className="bg-slate-900 p-10 rounded-[2.5rem] w-full max-w-sm border border-slate-800 shadow-2xl space-y-8">
+        <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+          <Users className="text-indigo-400" /> CLASS IDENTIFIER
+        </h2>
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">班级 ID (例如: 软工一班)</label>
+          <input 
+            type="text" value={classId} onChange={(e) => setClassId(e.target.value)}
+            placeholder="Class Name"
+            className="w-full bg-slate-800 border-2 border-slate-700 text-white p-5 rounded-2xl outline-none focus:border-indigo-500 transition-all text-lg font-medium"
+          />
+        </div>
+        <button 
+          disabled={!classId} onClick={() => setStep('quiz')} 
+          className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl disabled:opacity-20 transition-all active:scale-95 shadow-lg shadow-indigo-900/20"
+        >
+          PROCEED
+        </button>
+      </div>
+    </div>
+  );
+
+  if (step === 'quiz') return (
+    <div className="min-h-screen bg-slate-950 flex flex-col p-6 md:p-12">
+      <div className="max-w-2xl w-full mx-auto flex-1 flex flex-col justify-center">
+        <div className="w-full bg-slate-900 h-3 rounded-full mb-16 overflow-hidden border border-slate-800">
+          <div 
+            className="bg-indigo-500 h-full transition-all duration-700 ease-out shadow-[0_0_20px_rgba(99,102,241,0.5)]" 
+            style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
+          ></div>
+        </div>
+        <div className="animate-in slide-in-from-right duration-500">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="h-px w-8 bg-indigo-500"></span>
+            <span className="text-indigo-400 font-mono text-sm font-bold tracking-widest uppercase">DIMENSION {currentQuestion + 1} OF {questions.length}</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-12 leading-tight tracking-tight">
+            {questions[currentQuestion].q}
+          </h2>
+          <div className="grid gap-5">
+            {questions[currentQuestion].options.map((opt, idx) => (
+              <button 
+                key={idx} onClick={() => handleAnswer(opt)} 
+                className="group text-left p-6 md:p-8 rounded-3xl bg-slate-900/50 border border-slate-800 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all flex items-center justify-between"
+              >
+                <span className="text-slate-300 group-hover:text-white font-medium text-xl leading-relaxed">{opt.text}</span>
+                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center group-hover:bg-indigo-600 transition-colors ml-4 shrink-0">
+                  <ChevronRight className="text-slate-600 group-hover:text-white w-6 h-6" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (step === 'result' && finalResultId) {
+    const res = resultProfiles[finalResultId];
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6 py-12">
+        <div className="max-w-3xl w-full bg-slate-900 rounded-[3rem] shadow-2xl overflow-hidden border border-slate-800 relative animate-in fade-in slide-in-from-bottom duration-1000">
+          <div className="h-80 relative">
+            <img src={res.image} alt={res.name} className="w-full h-full object-cover opacity-40" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 p-8 rounded-[2rem] bg-slate-900 border-4 border-slate-800 shadow-2xl">
+              {res.icon}
+            </div>
+          </div>
+          
+          <div className="p-10 md:p-16 text-center pt-16">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 mb-6">
+              <Sparkles className="w-4 h-4 text-indigo-400 animate-spin-slow" />
+              <span className="text-xs font-black tracking-widest text-indigo-300 uppercase italic">Personality Match Found</span>
+            </div>
+            <h2 className="text-5xl md:text-6xl font-black mb-4 tracking-tighter text-white">{res.name}</h2>
+            <p className="text-indigo-400 font-bold text-2xl mb-10">{res.target}</p>
+            
+            <div className="max-w-lg mx-auto p-8 bg-slate-800/30 rounded-3xl border border-slate-700/50 mb-12 shadow-inner">
+              <p className="text-slate-300 leading-relaxed text-xl font-medium italic">"{res.desc}"</p>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-5">
+              <button 
+                onClick={() => setStep('stats')} 
+                className="flex-1 bg-white text-slate-950 font-black py-6 rounded-2xl hover:bg-slate-200 transition-all flex items-center justify-center gap-2 text-lg"
+              >
+                CLASS STATISTICS <BarChart className="w-6 h-6" />
+              </button>
+              <button 
+                onClick={() => { setStep('welcome'); setTally({1:0,2:0,3:0,4:0,5:0}); setFinalResultId(null); setCurrentQuestion(0); }} 
+                className="flex-1 bg-slate-800 text-white font-black py-6 rounded-2xl hover:bg-slate-700 transition-all text-lg"
+              >
+                RETAKE TEST
+              </button>
+            </div>
+          </div>
+          <div className="absolute top-8 right-8 animate-bounce">
+            <PartyPopper className="text-yellow-500 w-12 h-12" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'stats') return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+      <div className="max-w-4xl w-full bg-slate-900 rounded-[2.5rem] p-10 md:p-16 border border-slate-800 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 blur-[120px] rounded-full"></div>
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-16 gap-6 relative z-10">
+          <div className="space-y-2">
+            <h2 className="text-4xl font-black text-white tracking-tighter uppercase">Team DNA Distribution</h2>
+            <p className="text-indigo-400 font-bold uppercase tracking-widest text-sm flex items-center gap-2">
+              <Users className="w-4 h-4" /> Class Segment: {classId || 'All Sectors'}
+            </p>
+          </div>
+          <button 
+            onClick={() => setStep('result')} 
+            className="p-4 bg-slate-800 rounded-2xl hover:bg-slate-700 text-indigo-400 transition-all shadow-lg"
+          >
+            <RefreshCcw className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="h-72 w-full mb-16 relative z-10">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={statsData} layout="vertical">
+              <XAxis type="number" hide />
+              <YAxis dataKey="name" type="category" width={80} tick={{fill: '#64748b', fontSize: 12, fontWeight: '900'}} />
+              <Tooltip 
+                cursor={{fill: 'rgba(255,255,255,0.03)'}} 
+                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '20px', padding: '15px' }} 
+              />
+              <Bar dataKey="percentage" radius={[0, 12, 12, 0]} barSize={40}>
+                {statsData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={['#f43f5e', '#8b5cf6', '#ec4899', '#3b82f6', '#10b981'][index]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 relative z-10">
+          {statsData.map((s, idx) => (
+            <div key={idx} className="bg-slate-800/40 p-6 rounded-[1.5rem] border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="w-3 h-3 rounded-full shadow-[0_0_10px_currentColor]" style={{color: ['#f43f5e', '#8b5cf6', '#ec4899', '#3b82f6', '#10b981'][idx], backgroundColor: 'currentColor'}}></div>
+                <span className="text-slate-400 font-black text-xs uppercase tracking-tighter group-hover:text-slate-200">{s.fullName}</span>
+              </div>
+              <span className="text-white font-black text-3xl tracking-tighter">{s.percentage}%</span>
+            </div>
+          ))}
+        </div>
+
+        <button 
+          onClick={() => setStep('welcome')} 
+          className="mt-16 w-full border-2 border-slate-800 text-slate-500 font-black py-6 rounded-2xl hover:border-indigo-500 hover:text-white transition-all uppercase tracking-widest text-sm"
+        >
+          Return to Hub
+        </button>
+      </div>
+    </div>
+  );
+
+  return null;
+};
+
+export default App;
